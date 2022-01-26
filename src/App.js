@@ -6,6 +6,13 @@ import './App.css';
 const TWITTER_HANDLE = 'codingantoine';
 const TWITTER_LINK = `https://twitter.com/${TWITTER_HANDLE}`;
 
+const TEST_MUSIC = [
+  '<iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/3urJUvRhgMrwydaTQFVEg9?utm_source=generator" width="100%" height="80" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>',
+  '<iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/47cNDW1xyM03mT2kseO41a?utm_source=generator" width="100%" height="80" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>',
+  '<iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/2DOc7EJutpU8OrBHV6RABG?utm_source=generator" width="100%" height="80" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>',
+  '<iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/6DFzpa0eHyEkvQ2oeewmA2?utm_source=generator" width="100%" height="80" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>',
+];
+
 const App = () => {
   const [walletAddress, setWalletAddress] = useState(null);
 
@@ -57,6 +64,19 @@ const App = () => {
       Connect to Wallet
     </button>
   );
+  const renderConnectedContainer = () => (
+    <div className="connected-container">
+      <div className="iframe-grid">
+        {TEST_MUSIC.map((iframe) => (
+          <div
+            className="iframe-item"
+            key={iframe}
+            dangerouslySetInnerHTML={{ __html: iframe }}
+          />
+        ))}
+      </div>
+    </div>
+  );
 
   /*
    * When our component first mounts, let's check to see if we have a connected
@@ -79,6 +99,7 @@ const App = () => {
             View your music collection in the metaverse ✨
           </p>
           {!walletAddress && renderNotConnectedContainer()}
+          {walletAddress && renderConnectedContainer()}
         </div>
         <div className="footer-container">
           <img alt="Twitter Logo" className="twitter-logo" src={twitterLogo} />
