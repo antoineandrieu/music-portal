@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import twitterLogo from './assets/twitter-logo.svg';
 import './App.css';
+import idl from './idl.json';
+import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import { Program, Provider, web3 } from '@project-serum/anchor';
 
 // Constants
 const TWITTER_HANDLE = 'codingantoine';
@@ -13,8 +16,27 @@ const TEST_MUSIC = [
   '<iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/6DFzpa0eHyEkvQ2oeewmA2?utm_source=generator" width="100%" height="80" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>',
 ];
 
+// SystemProgram is a reference to the Solana runtime!
+const { SystemProgram, Keypair } = web3;
+
+// Create a keypair for the account that will hold the GIF data.
+let baseAccount = Keypair.generate();
+
+// Get our program's id from the IDL file.
+const programID = new PublicKey(idl.metadata.address);
+
+// Set our network to devnet.
+const network = clusterApiUrl('devnet');
+
+// Controls how we want to acknowledge when a transaction is "done".
+const opts = {
+  preflightCommitment: 'processed',
+};
+
 const App = () => {
   const [walletAddress, setWalletAddress] = useState(null);
+  const [inputValue, setInputValue] = useState('');
+  const [songList, setSongList] = useState([]);
 
   const checkIfWalletIsConnected = async () => {
     try {
@@ -52,6 +74,47 @@ const App = () => {
       setWalletAddress(response.publicKey.toString());
     }
   };
+
+  const sendSong = async () => {
+    if (inputValue.length === 0) {
+      console.log('No song link given!');
+      return;
+    }
+    setInputValue('');
+    console.log('Song link:', inputValue);
+    try {
+      const provider = getProvider();
+      const program = new Program(idl, programID, provider);
+
+      await program.rpc.addGif(inputValue, {
+        accounts: {
+          baseAccount: baseAccount.publicKey,
+          user: provider.wallet.publicKey,
+        },
+      });
+      console.log('GIF successfully sent to program', inputValue);
+
+      await getSongList();
+    } catch (error) {
+      console.log('Error sending GIF:', error);
+    }
+  };
+
+  const onInputChange = (event) => {
+    const { value } = event.target;
+    setInputValue(value);
+  };
+
+  const getProvider = () => {
+    const connection = new Connection(network, opts.preflightCommitment);
+    const provider = new Provider(
+      connection,
+      window.solana,
+      opts.preflightCommitment
+    );
+    return provider;
+  };
+
   /*
    * We want to render this UI when the user hasn't connected
    * their wallet to our app yet.
@@ -64,19 +127,89 @@ const App = () => {
       Connect to Wallet
     </button>
   );
-  const renderConnectedContainer = () => (
-    <div className="connected-container">
-      <div className="iframe-grid">
-        {TEST_MUSIC.map((iframe) => (
-          <div
-            className="iframe-item"
-            key={iframe}
-            dangerouslySetInnerHTML={{ __html: iframe }}
-          />
-        ))}
-      </div>
-    </div>
-  );
+
+  const renderConnectedContainer = () => {
+    if (songList === null) {
+      return (
+        <div className="connected-container">
+          <button
+            className="cta-button submit-gif-button"
+            onClick={createSongAccount}
+          >
+            Do One-Time Initialization For GIF Program Account
+          </button>
+        </div>
+      );
+    }
+    // Otherwise, we're good! Account exists. User can submit GIFs.
+    else {
+      return (
+        <div className="connected-container">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              sendSong();
+            }}
+            value={inputValue}
+            onChange={onInputChange}
+          >
+            <input type="text" placeholder="Enter music link!" />
+            <button type="submit" className="cta-button submit-link-button">
+              Submit
+            </button>
+          </form>
+          <div className="iframe-grid">
+            {songList.map((iframe) => (
+              <div
+                className="iframe-item"
+                key={iframe}
+                dangerouslySetInnerHTML={{ __html: iframe }}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+  };
+
+  const createSongAccount = async () => {
+    try {
+      const provider = getProvider();
+      const program = new Program(idl, programID, provider);
+      console.log('ping');
+      await program.rpc.initialize({
+        accounts: {
+          baseAccount: baseAccount.publicKey,
+          user: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        },
+        signers: [baseAccount],
+      });
+      console.log(
+        'Created a new BaseAccount w/ address:',
+        baseAccount.publicKey.toString()
+      );
+      await getSongList();
+    } catch (error) {
+      console.log('Error creating BaseAccount account:', error);
+    }
+  };
+
+  const getSongList = async () => {
+    try {
+      const provider = getProvider();
+      const program = new Program(idl, programID, provider);
+      const account = await program.account.baseAccount.fetch(
+        baseAccount.publicKey
+      );
+
+      console.log('Got the account', account);
+      setSongList(account.songList);
+    } catch (error) {
+      console.log('Error in getGifList: ', error);
+      setSongList(null);
+    }
+  };
 
   /*
    * When our component first mounts, let's check to see if we have a connected
@@ -89,6 +222,13 @@ const App = () => {
     window.addEventListener('load', onLoad);
     return () => window.removeEventListener('load', onLoad);
   }, []);
+
+  useEffect(() => {
+    if (walletAddress) {
+      console.log('Fetching Music list...');
+      getSongList();
+    }
+  }, [walletAddress]);
 
   return (
     <div className="App">
